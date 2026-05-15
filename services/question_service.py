@@ -1,18 +1,18 @@
 from database.client import supabase
 
 
-def save_questions(
+def insert_questions(
     questions,
     skill,
     segment,
     experience_band
 ):
 
-    formatted_questions = []
+    rows = []
 
     for q in questions:
 
-        formatted_questions.append({
+        row = {
             "skill": skill,
             "segment": segment,
             "experience_band": experience_band,
@@ -22,13 +22,52 @@ def save_questions(
             "option_c": q["option_c"],
             "option_d": q["option_d"],
             "correct_answer": q["correct_answer"]
-        })
+        }
+
+        rows.append(row)
 
     response = (
         supabase
         .table("question")
-        .insert(formatted_questions)
+        .insert(rows)
         .execute()
     )
 
-    return response.data
+    print("INSERT RESPONSE:")
+    print(response)
+
+    return response.data if response.data else []
+
+
+def get_questions(
+    skill,
+    segment,
+    experience_band
+):
+
+    response = (
+        supabase
+        .table("question")
+        .select("*")
+        .eq("skill", skill)
+        .eq("segment", segment)
+        .eq("experience_band", experience_band)
+        .execute()
+    )
+
+    return response.data if response.data else []
+
+
+def count_questions(
+    skill,
+    segment,
+    experience_band
+):
+
+    questions = get_questions(
+        skill,
+        segment,
+        experience_band
+    )
+
+    return len(questions)

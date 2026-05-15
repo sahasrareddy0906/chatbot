@@ -1,7 +1,11 @@
 from fastapi import APIRouter
-from services.question_service import save_questions
+
 from services.openai_service import (
-    generate_questions
+    generate_and_store_questions
+)
+
+from services.question_service import (
+    get_questions
 )
 
 router = APIRouter(
@@ -9,30 +13,37 @@ router = APIRouter(
     tags=["Questions"]
 )
 
-@router.get("/generate")
+
+@router.post("/generate")
 def generate(
-    skill: str,
+    role: str,
     segment: str,
-    experience_band: str,
-    count: int = 3
+    experience_band: str
 ):
 
-    questions = generate_questions(
-        skill,
+    result = generate_and_store_questions(
+        role,
         segment,
-        experience_band,
-        count
+        experience_band
     )
 
-    saved = save_questions(
-        questions,
-        skill,
+    return result
+
+
+@router.get("/fetch")
+def fetch(
+    role: str,
+    segment: str,
+    experience_band: str
+):
+
+    questions = get_questions(
+        role,
         segment,
         experience_band
     )
 
     return {
-        "generated": len(questions),
-        "saved": len(saved),
-        "questions": saved
+        "count": len(questions),
+        "questions": questions
     }

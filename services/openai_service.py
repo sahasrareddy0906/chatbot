@@ -4,6 +4,11 @@ import json
 from openai import OpenAI
 from dotenv import load_dotenv
 
+from services.question_service import (
+    insert_questions,
+    count_questions
+)
+
 load_dotenv()
 
 client = OpenAI(
@@ -14,17 +19,20 @@ client = OpenAI(
 DIFFICULTY_MAP = {
     "0-2": {
         "label": "beginner",
-        "description": "Basic syntax and simple concepts."
+        "description":
+            "Basic syntax, definitions, simple concepts."
     },
 
     "2-5": {
         "label": "intermediate",
-        "description": "Moderate problem solving and practical usage."
+        "description":
+            "Practical application and moderate problem solving."
     },
 
     "5+": {
         "label": "advanced",
-        "description": "Deep concepts and architecture."
+        "description":
+            "Deep concepts, architecture, scalability and performance."
     }
 }
 
@@ -44,8 +52,11 @@ SEGMENT_MAP = {
 }
 
 
+MIN_QUESTIONS_PER_COMBO = 30
+
+
 def build_prompt(
-    skill,
+    role,
     segment,
     experience_band,
     count
@@ -59,9 +70,11 @@ def build_prompt(
     seg_desc = SEGMENT_MAP.get(segment, "")
 
     prompt = f"""
+You are an exam question generator for a technical recruitment system.
+
 Generate exactly {count} MCQ questions.
 
-Skill: {skill}
+Role: {role}
 
 Segment:
 {segment} — {seg_desc}
@@ -79,6 +92,7 @@ Rules:
 3. Return ONLY JSON array
 4. No markdown
 5. No explanations
+6. Questions must be unique
 
 Format:
 [
@@ -97,14 +111,14 @@ Format:
 
 
 def generate_questions(
-    skill,
+    role,
     segment,
     experience_band,
-    count=3
+    count=10
 ):
 
     prompt = build_prompt(
-        skill,
+        role,
         segment,
         experience_band,
         count
@@ -128,7 +142,7 @@ def generate_questions(
             ],
 
             temperature=0.7,
-            max_tokens=2000
+            max_tokens=3000
         )
 
         raw = response.choices[0].message.content.strip()
@@ -144,10 +158,83 @@ def generate_questions(
 
         questions = json.loads(raw)
 
+        for q in questions:
+
+            required = [
+                "question_text",
+                "option_a",
+                "option_b",
+                "option_c",
+                "option_d",
+                "correct_answer"
+            ]
+
+            for field in required:
+
+                if field not in q:
+                    raise ValueError(
+                        f"Missing field: {field}"
+                    )
+
         return questions
+
+    except json.JSONDecodeError as e:
+
+        print(f"JSON parse error: {e}")
+
+        return []
 
     except Exception as e:
 
+        print(f"OpenAI error: {e}")
+
+        return []
+
+
+def generate_and_store_questions(
+    role,
+    segment,
+    experience_band,
+    count=10
+):
+
+    existing = count_questions(
+        role,
+        segment,
+        experience_band
+    )
+
+    if existing >= MIN_QUESTIONS_PER_COMBO:
+
         return {
-            "error": str(e)
+            "status": "skipped",
+            "existing_count": existing,
+            "new_count": 0
         }
+
+    questions = generate_questions(
+        role,
+        segment,
+        experience_band,
+        count
+    )
+
+    if not questions:
+
+        return {
+            "status": "failed"
+        }
+
+    stored = insert_questions(
+        questions,
+        role,
+        segment,
+        experience_band
+    )
+
+    return {
+        "status": "success",
+        "existing_count": existing,
+        "new_count": len(stored),
+        "total_count": existing + len(stored)
+    }
