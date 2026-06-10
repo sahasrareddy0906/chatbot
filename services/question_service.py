@@ -32,7 +32,8 @@ def insert_questions(
         .insert(rows)
         .execute()
     )
-
+    print("QUESTIONS GENERATED:")
+    print(len(questions))
     print("INSERT RESPONSE:")
     print(response)
 
@@ -44,6 +45,10 @@ def get_questions(
     segment,
     experience_band
 ):
+    print("FETCH PARAMS:")
+    print(skill)
+    print(segment)
+    print(experience_band)
 
     response = (
         supabase
@@ -54,7 +59,10 @@ def get_questions(
         .eq("experience_band", experience_band)
         .execute()
     )
-
+    print("FETCHED QUESTIONS:")
+    print(response.data)
+    print("COUNT:")
+    print(len(response.data))
     return response.data if response.data else []
 
 

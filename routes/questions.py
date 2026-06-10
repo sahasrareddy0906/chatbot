@@ -1,49 +1,90 @@
-from fastapi import APIRouter
+from fastapi import (
+    APIRouter
+)
 
+from pydantic import (
+    BaseModel
+)
+from services.question_service import (
+    insert_questions
+)
 from services.openai_service import (
     generate_and_store_questions
 )
 
-from services.question_service import (
-    get_questions
-)
-
 router = APIRouter(
+
     prefix="/questions",
+
     tags=["Questions"]
 )
 
 
-@router.post("/generate")
-def generate(
-    role: str,
-    segment: str,
-    experience_band: str
+# =========================
+# REQUEST MODEL
+# =========================
+
+class GenerateQuestionRequest(
+    BaseModel
 ):
 
-    result = generate_and_store_questions(
-        role,
-        segment,
-        experience_band
+    skill: str
+
+    segment: str
+
+    experience_band: str
+
+
+# =========================
+# GENERATE QUESTIONS
+# =========================
+
+@router.post("/generate")
+def generate_questions(
+
+    request:
+    GenerateQuestionRequest
+):
+
+    result = (
+
+        generate_and_store_questions(
+
+            request.skill,
+
+            request.segment,
+
+            request.experience_band,
+
+            count=10
+        )
     )
 
     return result
 
+    saved_questions = (
 
-@router.get("/fetch")
-def fetch(
-    role: str,
-    segment: str,
-    experience_band: str
-):
+    insert_questions(
 
-    questions = get_questions(
-        role,
-        segment,
-        experience_band
+        questions,
+
+        request.skill,
+
+        request.segment,
+
+        request.experience_band
     )
+)
+
 
     return {
-        "count": len(questions),
-        "questions": questions
-    }
+
+    "message":
+        "Questions saved successfully",
+
+    "count":
+        len(saved_questions),
+
+    "questions":
+        saved_questions
+}
