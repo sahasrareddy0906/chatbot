@@ -16,7 +16,9 @@ from services.candidate_service import (
 
 from services.exam_service import (
     start_exam,
-    submit_exam
+    submit_exam,
+    save_answer,
+    get_answered_count
 )
 
 router = APIRouter(
@@ -30,7 +32,14 @@ class SubmitExamRequest(
 ):
     answers: dict
 
+class SaveAnswerRequest(
+    BaseModel
+):
+    session_id: str
 
+    question_id: str
+
+    candidate_answer: str
 # =========================
 # START EXAM
 # =========================
@@ -108,3 +117,42 @@ def submit_candidate_exam(
         candidate["id"],
         request.answers
     )
+
+@router.post("/answer")
+def save_candidate_answer(
+
+    request: SaveAnswerRequest,
+
+    candidate=Depends(
+        get_current_candidate
+    )
+):
+
+    answer = save_answer(
+
+        request.session_id,
+
+        request.question_id,
+
+        request.candidate_answer
+    )
+
+    if not answer:
+
+        raise HTTPException(
+
+            status_code=400,
+
+            detail="Failed to save answer"
+        )
+
+    count = get_answered_count(
+        request.session_id
+    )
+
+    return {
+
+        "success": True,
+
+        "answered_count": count
+    }

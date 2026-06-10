@@ -527,3 +527,55 @@ def submit_exam(
         "submitted": True,
         "score": total_score
     }
+
+def save_answer(
+    session_id: str,
+    question_id: str,
+    candidate_answer: str
+):
+
+    response = (
+        supabase.table("exam_question")
+        .update({
+            "candidate_answer":
+                candidate_answer
+        })
+        .eq(
+            "session_id",
+            session_id
+        )
+        .eq(
+            "question_id",
+            question_id
+        )
+        .execute()
+    )
+
+    return (
+        response.data[0]
+        if response.data
+        else None
+    )
+
+
+def get_answered_count(
+    session_id: str
+):
+
+    response = (
+        supabase.table("exam_question")
+        .select("id")
+        .not_.is_(
+            "candidate_answer",
+            "null"
+        )
+        .eq(
+            "session_id",
+            session_id
+        )
+        .execute()
+    )
+
+    return len(
+        response.data
+    )
