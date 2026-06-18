@@ -106,7 +106,8 @@ def pick_random_questions(
 
     if len(all_questions) <= count:
         return all_questions
-
+    print("ROLE IN PICK:", role)
+    print("SEGMENT IN PICK:", segment)
     return random.sample(
         all_questions,
         count
@@ -327,8 +328,18 @@ def start_exam(
             existing["id"]
         )
 
+    print(
+        "EXPERIENCE BAND:",
+        experience_band
+    )
+
     segments = get_segments_for_band(
         experience_band
+    )
+    print("DEBUG SEGMENTS =", segments)
+    print(
+        "SEGMENTS:",
+        segments
     )
 
     all_questions = []
@@ -337,6 +348,11 @@ def start_exam(
 
     for segment in segments:
 
+        print(
+            "ROLE IN START_EXAM:",
+            role
+        )
+        print("LOOP SEGMENT =", segment)
         picked = pick_random_questions(
             role=role,
             segment=segment,
@@ -346,7 +362,15 @@ def start_exam(
                 QUESTIONS_PER_SEGMENT
         )
 
-        segment_map[segment] = picked
+        print(
+            segment,
+            "QUESTIONS FOUND:",
+            len(picked)
+        )
+
+        segment_map[segment] = (
+            picked
+        )
 
         all_questions.extend(
             picked
@@ -383,11 +407,27 @@ def start_exam(
                 "question_assignment_failed"
         }
 
+    print(
+        "SEGMENTS:",
+        segments
+    )
+
+    print(
+        "TOTAL QUESTIONS:",
+        len(all_questions)
+    )
+
+    for segment in segment_map:
+
+        print(
+            segment,
+            len(segment_map[segment])
+        )
+
     return build_exam_response(
         session,
         all_questions,
         segment_map
-    
     )
 def submit_exam(
     candidate_id: str,
@@ -578,4 +618,37 @@ def get_answered_count(
 
     return len(
         response.data
+    )
+def get_exam_results():
+
+    response = (
+        supabase.table("exam_result")
+        .select(
+            "*, candidate(email, username)"
+        )
+        .execute()
+    )
+
+    return (
+        response.data
+        if response.data
+        else []
+    )
+def shortlist_candidate(
+    result_id: str
+):
+
+    response = (
+        supabase.table("exam_result")
+        .update({
+            "hr_shortlisted": True
+        })
+        .eq("id", result_id)
+        .execute()
+    )
+
+    return (
+        response.data[0]
+        if response.data
+        else None
     )

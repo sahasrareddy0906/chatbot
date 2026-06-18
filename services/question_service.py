@@ -46,15 +46,15 @@ def get_questions(
     experience_band
 ):
     print("FETCH PARAMS:")
-    print(skill)
-    print(segment)
-    print(experience_band)
+    print(repr(skill))
+    print(repr(segment))
+    print(repr(experience_band))
 
     response = (
         supabase
         .table("question")
         .select("*")
-        .eq("skill", skill)
+        .ilike("skill", skill)
         .eq("segment", segment)
         .eq("experience_band", experience_band)
         .execute()

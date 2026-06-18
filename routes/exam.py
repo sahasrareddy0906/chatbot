@@ -18,7 +18,9 @@ from services.exam_service import (
     start_exam,
     submit_exam,
     save_answer,
-    get_answered_count
+    get_answered_count,
+    get_exam_results,
+    shortlist_candidate
 )
 
 router = APIRouter(
@@ -155,4 +157,29 @@ def save_candidate_answer(
         "success": True,
 
         "answered_count": count
+    }
+@router.get("/results")
+def exam_results():
+
+    return get_exam_results()
+@router.post(
+    "/results/{result_id}/shortlist"
+)
+def shortlist_result(
+    result_id: str
+):
+
+    result = shortlist_candidate(
+        result_id
+    )
+
+    if not result:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Result not found"
+        )
+
+    return {
+        "success": True
     }

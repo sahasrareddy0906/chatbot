@@ -28,7 +28,7 @@ class GenerateQuestionRequest(
     BaseModel
 ):
 
-    skill: str
+    role: str
 
     segment: str
 
@@ -50,7 +50,7 @@ def generate_questions(
 
         generate_and_store_questions(
 
-            request.skill,
+            request.role,
 
             request.segment,
 
@@ -62,29 +62,4 @@ def generate_questions(
 
     return result
 
-    saved_questions = (
-
-    insert_questions(
-
-        questions,
-
-        request.skill,
-
-        request.segment,
-
-        request.experience_band
-    )
-)
-
-
-    return {
-
-    "message":
-        "Questions saved successfully",
-
-    "count":
-        len(saved_questions),
-
-    "questions":
-        saved_questions
-}
+    
