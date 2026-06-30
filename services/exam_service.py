@@ -178,6 +178,100 @@ def calculate_time_remaining(
     )
 
 
+def is_session_expired(
+    session: dict
+) -> bool:
+
+    end_time_str = session.get(
+        "end_time"
+    )
+
+    if not end_time_str:
+        return False
+
+    normalized = end_time_str.replace(
+        "Z",
+        "+00:00"
+    )
+
+    end_time = datetime.fromisoformat(
+        normalized
+    )
+
+    if end_time.tzinfo is None:
+        end_time = end_time.replace(
+            tzinfo=timezone.utc
+        )
+
+    now = datetime.now(timezone.utc)
+
+    return now >= end_time
+
+
+def get_time_remaining_seconds(
+    session: dict
+) -> int:
+
+    end_time_str = session.get(
+        "end_time"
+    )
+
+    if not end_time_str:
+        return 0
+
+    normalized = end_time_str.replace(
+        "Z",
+        "+00:00"
+    )
+
+    end_time = datetime.fromisoformat(
+        normalized
+    )
+
+    if end_time.tzinfo is None:
+        end_time = end_time.replace(
+            tzinfo=timezone.utc
+        )
+
+    now = datetime.now(timezone.utc)
+
+    remaining = (
+        end_time - now
+    ).total_seconds()
+
+    return max(0, int(remaining))
+
+
+def auto_submit_expired_sessions():
+
+    now = datetime.now(
+        timezone.utc
+    ).isoformat()
+
+    response = (
+        supabase.table("exam_session")
+        .select("id, candidate_id")
+        .eq("submitted", False)
+        .lt("end_time", now)
+        .execute()
+    )
+
+    submitted_ids = []
+
+    for session in response.data or []:
+        submission = submit_exam(
+            session["id"],
+            session["candidate_id"]
+        )
+
+        if submission.get("score") is not None or submission.get("error") != "already_submitted":
+            submitted_ids.append(
+                session["id"]
+            )
+
+    return submitted_ids
+
+
 # =========================
 # BUILD RESPONSE
 # =========================
@@ -300,6 +394,59 @@ def get_exam_session_by_candidate(
 )
 
 
+def get_exam_session_by_id(
+    session_id: str
+):
+
+    response = (
+        supabase.table("exam_session")
+        .select("*")
+        .eq("id", session_id)
+        .execute()
+    )
+
+    return (
+        response.data[0]
+        if response.data
+        else None
+    )
+
+
+def get_exam_progress(
+    session_id: str
+):
+
+    total_resp = (
+        supabase.table("exam_question")
+        .select("id")
+        .eq("session_id", session_id)
+        .execute()
+    )
+
+    total_questions = len(total_resp.data or [])
+
+    answered_resp = (
+        supabase.table("exam_question")
+        .select("id")
+        .not_.is_("candidate_answer", "null")
+        .eq("session_id", session_id)
+        .execute()
+    )
+
+    answered_questions = len(answered_resp.data or [])
+
+    progress_percentage = (
+        int((answered_questions / total_questions) * 100)
+        if total_questions else 0
+    )
+
+    return {
+        "total_questions": total_questions,
+        "answered_questions": answered_questions,
+        "progress_percentage": progress_percentage
+    }
+
+
 # =========================
 # START EXAM
 # =========================
@@ -317,7 +464,18 @@ def start_exam(
 
     if existing:
 
-        if existing["submitted"]:
+        if existing.get("submitted"):
+
+            return {
+                "error":
+                    "already_submitted"
+            }
+
+        if is_session_expired(existing):
+            submit_exam(
+                existing["id"],
+                candidate_id
+            )
 
             return {
                 "error":
@@ -328,19 +486,13 @@ def start_exam(
             existing["id"]
         )
 
-    print(
-        "EXPERIENCE BAND:",
-        experience_band
-    )
+
 
     segments = get_segments_for_band(
         experience_band
     )
     print("DEBUG SEGMENTS =", segments)
-    print(
-        "SEGMENTS:",
-        segments
-    )
+    
 
     all_questions = []
 
@@ -348,10 +500,6 @@ def start_exam(
 
     for segment in segments:
 
-        print(
-            "ROLE IN START_EXAM:",
-            role
-        )
         print("LOOP SEGMENT =", segment)
         picked = pick_random_questions(
             role=role,
@@ -362,11 +510,6 @@ def start_exam(
                 QUESTIONS_PER_SEGMENT
         )
 
-        print(
-            segment,
-            "QUESTIONS FOUND:",
-            len(picked)
-        )
 
         segment_map[segment] = (
             picked
@@ -430,31 +573,28 @@ def start_exam(
         segment_map
     )
 def submit_exam(
-    candidate_id: str,
-    answers: dict
+    session_id: str,
+    candidate_id: str
 ):
 
-    session_resp = (
-        supabase.table("exam_session")
-        .select("*")
-        .eq("candidate_id", candidate_id)
-        .eq("submitted", False)
-        .execute()
+    session = get_exam_session_by_id(
+        session_id
     )
 
-    if not session_resp.data:
-
+    if not session or session["candidate_id"] != candidate_id:
         return {
-            "error":
-                "session_not_found"
+            "error": "session_not_found"
         }
 
-    session = session_resp.data[0]
+    if session.get("submitted"):
+        return {
+            "error": "already_submitted"
+        }
 
     eq_resp = (
         supabase.table("exam_question")
         .select("*, question(*)")
-        .eq("session_id", session["id"])
+        .eq("session_id", session_id)
         .execute()
     )
 
@@ -464,8 +604,8 @@ def submit_exam(
         else []
     )
 
-    total_score = 0
-
+    correct = 0
+    attempted = 0
     technical_score = 0
     analytical_score = 0
     domain_score = 0
@@ -474,36 +614,20 @@ def submit_exam(
     for eq in exam_questions:
 
         question = eq["question"]
+        candidate_answer = eq.get("candidate_answer")
 
-        qid = question["id"]
-
-        candidate_answer = (
-            answers.get(qid)
-        )
+        if candidate_answer is not None:
+            attempted += 1
 
         is_correct = (
-            candidate_answer
+            candidate_answer is not None
+            and candidate_answer
             ==
             question["correct_answer"]
         )
 
-        (
-            supabase
-            .table("exam_question")
-            .update({
-                "candidate_answer":
-                    candidate_answer,
-
-                "is_correct":
-                    is_correct
-            })
-            .eq("id", eq["id"])
-            .execute()
-        )
-
         if is_correct:
-
-            total_score += 1
+            correct += 1
 
             segment = (
                 question["segment"]
@@ -512,60 +636,72 @@ def submit_exam(
 
             if segment == "technical":
                 technical_score += 1
-
             elif segment == "analytical":
                 analytical_score += 1
-
             elif segment == "domain":
                 domain_score += 1
-
             elif segment == "management":
                 management_score += 1
+
+        (
+            supabase
+            .table("exam_question")
+            .update({
+                "is_correct": is_correct
+            })
+            .eq("id", eq["id"])
+            .execute()
+        )
+
+    percentage = (
+        round(correct * 100 / len(exam_questions), 2)
+        if exam_questions else 0
+    )
 
     (
         supabase
         .table("exam_result")
         .insert({
-            "session_id":
-                session["id"],
-
-            "candidate_id":
-                candidate_id,
-
-            "total_score":
-                total_score,
-
-            "technical_score":
-                technical_score,
-
-            "analytical_score":
-                analytical_score,
-
-            "domain_score":
-                domain_score,
-
-            "management_score":
-                management_score,
-
-            "hr_shortlisted":
-                False
+            "session_id": session_id,
+            "candidate_id": candidate_id,
+            "total_score": correct,
+            "technical_score": technical_score,
+            "analytical_score": analytical_score,
+            "domain_score": domain_score,
+            "management_score": management_score,
+            "hr_shortlisted": False
         })
         .execute()
     )
+
+    now = datetime.now(timezone.utc).isoformat()
 
     (
         supabase
         .table("exam_session")
         .update({
-            "submitted": True
+            "submitted": True,
+            "end_time": now
         })
-        .eq("id", session["id"])
+        .eq("id", session_id)
+        .execute()
+    )
+
+    (
+        supabase
+        .table("candidate")
+        .update({
+            "status": "exam_taken"
+        })
+        .eq("id", candidate_id)
         .execute()
     )
 
     return {
-        "submitted": True,
-        "score": total_score
+        "score": correct,
+        "correct": correct,
+        "attempted": attempted,
+        "percentage": percentage
     }
 
 def save_answer(
@@ -573,6 +709,16 @@ def save_answer(
     question_id: str,
     candidate_answer: str
 ):
+
+    if candidate_answer not in ["A", "B", "C", "D"]:
+        return None
+
+    session = get_exam_session_by_id(
+        session_id
+    )
+
+    if not session or session.get("submitted"):
+        return None
 
     response = (
         supabase.table("exam_question")
@@ -619,6 +765,48 @@ def get_answered_count(
     return len(
         response.data
     )
+def get_exam_result(
+    session_id: str
+):
+
+    response = (
+        supabase.table("exam_result")
+        .select(
+            "*, candidate(email, username)"
+        )
+        .eq("session_id", session_id)
+        .execute()
+    )
+
+    return (
+        response.data[0]
+        if response.data
+        else None
+    )
+
+
+def get_latest_candidate_result(
+    candidate_id: str
+):
+
+    response = (
+        supabase.table("exam_result")
+        .select(
+            "*, candidate(email, username)"
+        )
+        .eq("candidate_id", candidate_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+
+    return (
+        response.data[0]
+        if response.data
+        else None
+    )
+
+
 def get_exam_results():
 
     response = (
@@ -634,6 +822,7 @@ def get_exam_results():
         if response.data
         else []
     )
+
 def shortlist_candidate(
     result_id: str
 ):

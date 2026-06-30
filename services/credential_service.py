@@ -1,12 +1,8 @@
 from services.candidate_service import (
-
     get_unsent_candidates,
-
     mark_credentials_sent,
-
-    reset_candidate_password,
-
-    get_candidate_by_id
+    get_candidate_by_id,
+    reset_candidate_password
 )
 
 from services.drive_service import (
@@ -49,13 +45,9 @@ def prepare_credential_packages(
         # RESET PASSWORD
         # ---------------------
 
-        updated = (
-
-            reset_candidate_password(
-                candidate["id"]
-            )
-        )
-
+        updated = reset_candidate_password(
+    candidate["id"]
+)
 
         if not updated:
 
@@ -100,12 +92,9 @@ def prepare_single_credential_package(
     candidate_id: str
 ):
 
-    updated = (
-
-        reset_candidate_password(
-            candidate_id
-        )
-    )
+    updated = reset_candidate_password(
+    candidate_id
+)
 
 
     if not updated:

@@ -1,6 +1,9 @@
 import random
 import string
 
+import secrets
+import string
+
 from passlib.context import CryptContext
 
 from database.client import supabase
@@ -12,6 +15,39 @@ pwd_context = CryptContext(
 )
 
 
+from passlib.context import CryptContext
+from database.client import supabase
+
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto"
+)
+
+def reset_candidate_password(candidate_id: str):
+
+    alphabet = string.ascii_letters + string.digits
+
+    plain_password = "".join(
+        secrets.choice(alphabet)
+        for _ in range(10)
+    )
+
+    hashed_password = pwd_context.hash(
+        plain_password
+    )
+
+    supabase.table("candidate").update(
+        {
+            "password_hash": hashed_password
+        }
+    ).eq(
+        "id",
+        candidate_id
+    ).execute()
+
+    return {
+        "plain_password": plain_password
+    }
 # =========================
 # PASSWORD HELPERS
 # =========================
@@ -132,6 +168,70 @@ def get_candidates_by_drive(
     )
 
     return response.data
+
+
+def get_candidates_with_results_by_drive(
+    drive_id: str
+):
+
+    candidates = get_candidates_by_drive(
+        drive_id
+    ) or []
+
+    if not candidates:
+        return []
+
+    candidate_ids = [
+        candidate["id"]
+        for candidate in candidates
+    ]
+
+    result_resp = (
+        supabase.table("exam_result")
+        .select("*")
+        .in_("candidate_id", candidate_ids)
+        .execute()
+    )
+
+    results = result_resp.data or []
+
+    result_by_candidate = {
+        result["candidate_id"]: result
+        for result in results
+    }
+
+    question_count = {
+        "0-2": 20,
+        "2-5": 30,
+        "5+": 40
+    }
+
+    for candidate in candidates:
+        result = result_by_candidate.get(
+            candidate["id"]
+        )
+
+        if result:
+            total_questions = (
+                question_count.get(
+                    candidate.get(
+                        "experience_band",
+                        "0-2"
+                    ),
+                    20
+                )
+            )
+
+            percentage = (
+                round(result["total_score"] * 100 / total_questions, 2)
+                if total_questions else 0
+            )
+
+            result["percentage"] = percentage
+
+        candidate["result"] = result
+
+    return candidates
 
 
 # =========================
@@ -380,40 +480,3 @@ def get_candidate_by_username(
 
     return None
 
-# =========================
-# RESET PASSWORD
-# =========================
-
-def reset_candidate_password(
-    candidate_id: str
-):
-
-    new_password = generate_password()
-
-    password_hash = hash_password(
-        new_password
-    )
-
-    response = (
-        supabase.table("candidate")
-        .update({
-            "password_hash":
-                password_hash
-        })
-        .eq(
-            "id",
-            candidate_id
-        )
-        .execute()
-    )
-
-    if not response.data:
-        return None
-
-    candidate = response.data[0]
-
-    candidate["plain_password"] = (
-        new_password
-    )
-
-    return candidate

@@ -30,7 +30,7 @@ from services.candidate_service import (
 
     add_candidates_bulk,
 
-    get_candidates_by_drive,
+    get_candidates_with_results_by_drive,
 
     get_credential_summary
 )
@@ -269,7 +269,7 @@ def list_candidates(
 
     candidates = (
 
-        get_candidates_by_drive(
+        get_candidates_with_results_by_drive(
             drive_id
         )
     )

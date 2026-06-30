@@ -3,7 +3,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import (
     CORSMiddleware
 )
-
 from routes.auth import (
     router as auth_router
 )
@@ -22,6 +21,7 @@ from routes.results import (
 from routes.candidate_auth import (
     router as candidate_auth_router
 )
+from routes.scoring import router as scoring_router
 
 app = FastAPI()
 
@@ -60,7 +60,7 @@ app.include_router(
 app.include_router(
     candidate_auth_router
 )
-
+app.include_router(scoring_router)
 @app.get("/")
 def home():
 

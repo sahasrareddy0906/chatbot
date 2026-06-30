@@ -87,7 +87,7 @@ def get_current_hr(
     response = (
 
         supabase.table(
-            "hr"
+            "hr_user"
         )
 
         .select(
