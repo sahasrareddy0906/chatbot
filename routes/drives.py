@@ -88,8 +88,8 @@ class AddCandidatesRequest(
 
 @router.post("/")
 def create_hiring_drive(
-
-    request: CreateDriveRequest
+    request: CreateDriveRequest,
+    hr=Depends(get_current_hr)
 ):
 
     if len(
@@ -110,7 +110,7 @@ def create_hiring_drive(
 
     drive = create_drive(
 
-        "6a861161-0be2-40b1-bbbc-cfed79423818",
+        hr["id"],
 
         request.role,
 
@@ -144,11 +144,12 @@ def create_hiring_drive(
 # =========================
 
 @router.get("/")
-def list_drives():
+def list_drives(
+    hr=Depends(get_current_hr)
+):
 
     drives = get_drives_by_hr(
-
-        "6a861161-0be2-40b1-bbbc-cfed79423818"
+        hr["id"]
     )
 
     return {

@@ -23,6 +23,8 @@ from routes.candidate_auth import (
 )
 from routes.scoring import router as scoring_router
 
+from routes.resumes import router as resume_router
+
 app = FastAPI()
 
 
@@ -61,6 +63,8 @@ app.include_router(
     candidate_auth_router
 )
 app.include_router(scoring_router)
+
+app.include_router(resume_router)
 @app.get("/")
 def home():
 

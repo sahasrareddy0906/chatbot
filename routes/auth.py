@@ -12,7 +12,7 @@ from passlib.context import (
 from database.client import (
     supabase
 )
-
+from services.auth_service import create_access_token
 
 router = APIRouter(
     prefix="/auth",
@@ -82,7 +82,7 @@ def register(
 def login(
     request: LoginRequest
 ):
-
+    print("===== MY LOGIN ROUTE IS RUNNING =====")
     response = (
         supabase
         .table("hr_user")
@@ -114,13 +114,17 @@ def login(
                 "Invalid password"
         }
 
-    return {
-        "message":
-            "Login successful",
-
-        "email":
-            user["email"],
-
-        "id":
-            user["id"]
+    token = create_access_token(
+    {
+        "sub": str(user["id"]),
+        "email": user["email"]
     }
+)
+    
+    print("TOKEN GENERATED:", token)
+    return {
+    "access_token": token,
+    "token_type": "bearer",
+    "email": user["email"],
+    "id": user["id"]
+}

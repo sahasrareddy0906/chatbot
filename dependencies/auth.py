@@ -70,7 +70,7 @@ def get_current_hr(
     hr_id = payload.get(
         "sub"
     )
-
+    print("HR ID:", hr_id)
 
     if not hr_id:
 
@@ -137,7 +137,8 @@ def get_current_candidate(
             token
         )
     )
-
+    print("TOKEN:", token)
+    print("PAYLOAD:", payload)
 
     if not payload:
 

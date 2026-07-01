@@ -1,27 +1,32 @@
-def hash_password(password: str):
+from jose import jwt
+from datetime import datetime, timedelta
+import os
+from dotenv import load_dotenv
 
-    return password + "_hashed"
+load_dotenv()
 
-
-def verify_password(
-    plain_password: str,
-    hashed_password: str
-):
-
-    return (
-        hashed_password
-        ==
-        plain_password + "_hashed"
-    )
-
+SECRET_KEY = os.getenv("SECRET_KEY", "abc123")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
 
 def create_access_token(data: dict):
+    print("AUTH SERVICE EXECUTED")
+    print(data)
 
-    return "test_token"
+    payload = data.copy()
+    payload["exp"] = datetime.utcnow() + timedelta(minutes=60)
+
+    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+    print("JWT =", token)
+
+    return token
 
 
 def decode_access_token(token: str):
+    print("DECODE CALLED")
 
-    return {
-        "sub": "test"
-    }
+    return jwt.decode(
+        token,
+        SECRET_KEY,
+        algorithms=[ALGORITHM]
+    )

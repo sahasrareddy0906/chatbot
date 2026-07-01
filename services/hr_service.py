@@ -1,27 +1,7 @@
 from database.client import supabase
 
-from services.auth_service import (
-    hash_password,
-    verify_password,
-    create_access_token
-)
 
-
-def get_hr_by_email(
-    email: str
-):
-
-    response = (
-        supabase
-        .table("hr_user")
-        .select("*")
-        .eq("email", email)
-        .execute()
-    )
-
-    if response.data:
-
-        return response.data[0]
+def get_hr_by_email(email: str):
 
     return None
 
@@ -31,35 +11,17 @@ def register_hr(
     password: str
 ):
 
-    existing = get_hr_by_email(
-        email
-    )
-
-    if existing:
-
-        return None
-
-    hashed = hash_password(
-        password
-    )
-
     response = (
         supabase
         .table("hr_user")
         .insert({
             "email": email,
-
-            "password_hash":
-                hashed
+            "password_hash": "test123"
         })
         .execute()
     )
 
-    if response.data:
-
-        return response.data[0]
-
-    return None
+    return response.data[0]
 
 
 def login_hr(
@@ -67,38 +29,15 @@ def login_hr(
     password: str
 ):
 
-    hr = get_hr_by_email(
-        email
-    )
-
-    if not hr:
-
-        return None
-
-    valid = verify_password(
-        password,
-        hr["password_hash"]
-    )
-
-    if not valid:
-
-        return None
-
-    token = create_access_token({
-        "sub": hr["id"]
-    })
+    access_token = create_access_token(
+    {
+        "sub": response.data[0]["id"]
+    }
+)
 
     return {
-
-        "access_token":
-            token,
-
-        "token_type":
-            "bearer",
-
-        "hr_id":
-            hr["id"],
-
-        "email":
-            hr["email"]
-    }
+    "access_token": access_token,
+    "token_type": "bearer",
+    "email": response.data[0]["email"],
+    "id": response.data[0]["id"]
+}

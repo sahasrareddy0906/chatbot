@@ -842,3 +842,131 @@ def generate_and_store_questions(
         "new_count": len(stored),
         "total_count": existing + len(stored)
     }
+
+def build_resume_extraction_prompt(resume_text: str) -> str:
+    """
+    Builds the prompt for OpenAI to extract structured data
+    from raw resume text.
+    """
+    # Truncate very long resumes to control token cost
+    # 6000 chars is roughly 1500 tokens — enough for most resumes
+    truncated_text = resume_text[:6000]
+
+    prompt = f"""
+You are an expert resume parser for technical recruitment
+in the Indian job market.
+
+Extract structured information from the resume text below.
+Be precise and only extract what is explicitly stated or
+strongly implied — do not invent information.
+
+RESUME TEXT:
+\"\"\"
+{truncated_text}
+\"\"\"
+
+EXTRACTION RULES:
+1. List ALL technical skills mentioned — programming languages,
+   frameworks, tools, databases, cloud platforms
+2. Estimate total years of professional experience based on
+   work history dates. If unclear, estimate conservatively.
+3. List soft skills only if explicitly mentioned
+   (e.g. "led a team of 5", "managed stakeholder communication")
+4. Extract education — degree, institution, year if available
+5. Extract company names and job titles from work history
+6. Identify the candidate's apparent seniority level based on
+   role titles and years of experience
+7. Note any certifications mentioned
+8. Do NOT include personal contact information
+   (phone, address, email) in the output
+
+Return ONLY valid JSON. No markdown. No explanation.
+
+FORMAT:
+{{
+  "technical_skills": ["Python", "React", "PostgreSQL", ...],
+  "soft_skills": ["Team Leadership", "Stakeholder Management", ...],
+  "years_of_experience": 3.5,
+  "seniority_level": "junior",
+  "education": [
+    {{
+      "degree": "B.Tech Computer Science",
+      "institution": "...",
+      "year": "2021"
+    }}
+  ],
+  "work_history": [
+    {{
+      "company": "...",
+      "title": "...",
+      "duration": "Jan 2021 - Present",
+      "key_responsibilities": "Brief one-line summary"
+    }}
+  ],
+  "certifications": ["AWS Certified Developer", ...],
+  "summary": "2-3 sentence professional summary based on the resume"
+}}
+"""
+    return prompt.strip()
+
+
+def extract_resume_data(resume_text: str) -> dict | None:
+    """
+    Call OpenAI to extract structured data from resume text.
+    """
+    prompt = build_resume_extraction_prompt(resume_text)
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a precise resume parsing assistant. "
+                        "Extract only factual information from the "
+                        "resume text. Never invent skills or "
+                        "experience not present in the text. "
+                        "Return ONLY valid JSON, no other text."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            temperature=0.3,
+            # Low temperature — this is extraction, not creative generation
+            # We want consistent, factual output not variety
+            max_tokens=2000
+        )
+
+        raw = response.choices[0].message.content.strip()
+
+        # Safety clean
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        raw = raw.strip()
+
+        data = json.loads(raw)
+
+        # Validate required fields exist
+        required = [
+            "technical_skills", "years_of_experience",
+            "seniority_level", "summary"
+        ]
+        for field in required:
+            if field not in data:
+                data[field] = None if field != "technical_skills" else []
+
+        return data
+
+    except json.JSONDecodeError as e:
+        print(f"Resume extraction JSON parse error: {e}")
+        print(f"Raw: {raw[:300]}")
+        return None
+    except Exception as e:
+        print(f"Resume extraction error: {e}")
+        return None
